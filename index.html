@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Inventory Management Dashboard</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<header>
+  <h2>📦 Inventory Management Dashboard</h2>
+</header>
+
+<section class="kpis">
+  <div class="kpi blue"><p>Total Products</p><h1 id="pCount">0</h1></div>
+  <div class="kpi green"><p>Total Stock</p><h1 id="tStock">0</h1></div>
+  <div class="kpi orange"><p>Low Stock</p><h1 id="low">0</h1></div>
+  <div class="kpi red"><p>Expired</p><h1 id="exp">0</h1></div>
+</section>
+
+<section class="dashboard">
+  <div class="card large">
+    <h3>Inventory Table</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Product</th>
+          <th>Stock</th>
+          <th>Expiry</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="table"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Stock Distribution</h3>
+    <canvas id="pieChart"></canvas>
+  </div>
+
+  <div class="card">
+    <h3>Product-wise Stock</h3>
+    <canvas id="barChart"></canvas>
+  </div>
+
+  <div class="card">
+    <h3>Inventory Trend</h3>
+    <canvas id="lineChart"></canvas>
+  </div>
+</section>
+
+<script src="script.js"></script>
+</body>
+</html>
