@@ -1,69 +1,194 @@
-const inventory = [
-  { cat:"Electronics", name:"Laptop", stock:50, exp:"2026-05-10" },
-  { cat:"Electronics", name:"Mobile", stock:90, exp:"2026-03-15" },
-  { cat:"Groceries", name:"Rice", stock:150, exp:"2026-02-20" },
-  { cat:"Groceries", name:"Milk", stock:15, exp:"2024-12-28" },
-  { cat:"Groceries", name:"Bread", stock:10, exp:"2024-12-20" },
-  { cat:"Stationery", name:"Pen", stock:300, exp:"2027-06-01" },
-  { cat:"Stationery", name:"Notebook", stock:120, exp:"2027-01-10" },
-  { cat:"Electronics", name:"Headphones", stock:25, exp:"2026-09-10" }
-];
+const form = document.getElementById("inventoryForm");
+const tableBody = document.getElementById("inventoryTable");
+const historyBody = document.getElementById("historyTable");
+const searchInput = document.getElementById("search");
+const themeToggle = document.getElementById("themeToggle");
 
-let totalStock=0, expired=0, low=0;
-const table = document.getElementById("table");
+const totalProducts = document.getElementById("totalProducts");
+const totalStock = document.getElementById("totalStock");
+const lowStock = document.getElementById("lowStock");
+const expired = document.getElementById("expired");
 
-inventory.forEach(p=>{
-  totalStock += p.stock;
-  let status="Good", cls="good";
+let inventory = JSON.parse(localStorage.getItem("inventory")) || [];
+let history = JSON.parse(localStorage.getItem("history")) || [];
+let editId = null;
 
-  if(new Date(p.exp) < new Date()){
-    status="Expired"; cls="expired"; expired++;
-  } else if(p.stock < 20){
-    status="Low"; cls="low"; low++;
+let barChart, pieChart;
+
+/* ================= SAVE PRODUCT ================= */
+form.addEventListener("submit", e => {
+  e.preventDefault();
+
+  const id = pid.value.trim();
+  const name = pname.value.trim();
+  const categoryVal = category.value.trim();
+  const baseQty = Number(qty.value);
+  const incoming = Number(incomingStock.value || 0);
+  const outgoing = Number(outgoingStock.value || 0);
+  const expiry = expiryDate.value || null;
+
+  let product = inventory.find(p => p.id === id);
+
+  if (!product) {
+    product = { id, name, category: categoryVal, baseQty, qty: baseQty, expiry };
+    inventory.push(product);
+  } else {
+    product.name = name;
+    product.category = categoryVal;
+    product.expiry = expiry;
   }
 
-  table.innerHTML += `
-    <tr>
-      <td>${p.cat}</td>
-      <td>${p.name}</td>
-      <td>${p.stock}</td>
-      <td>${p.exp}</td>
-      <td class="${cls}">${status}</td>
-    </tr>`;
-});
-
-animate("pCount", inventory.length);
-animate("tStock", totalStock);
-animate("low", low);
-animate("exp", expired);
-
-// Charts
-const labels = inventory.map(p=>p.name);
-const values = inventory.map(p=>p.stock);
-
-new Chart(barChart,{
-  type:"bar",
-  data:{ labels, datasets:[{ data:values }] }
-});
-
-new Chart(pieChart,{
-  type:"pie",
-  data:{ labels, datasets:[{ data:values }] }
-});
-
-new Chart(lineChart,{
-  type:"line",
-  data:{
-    labels:["Jan","Feb","Mar","Apr","May"],
-    datasets:[{ data:[400,600,550,700,850], tension:0.4 }]
+  if (incoming > 0) {
+    history.push({
+      productId: id,
+      name,
+      type: "IN",
+      qty: incoming,
+      date: new Date().toLocaleString()
+    });
   }
+
+  if (outgoing > 0) {
+    history.push({
+      productId: id,
+      name,
+      type: "OUT",
+      qty: outgoing,
+      date: new Date().toLocaleString()
+    });
+  }
+
+  recalculateInventoryStock();
+  saveAll();
+  renderAll();
+  form.reset();
+  qty.disabled = false;
 });
 
-function animate(id,value){
-  let i=0;
-  const el=document.getElementById(id);
-  const int=setInterval(()=>{
-    el.innerText=i++;
-    if(i>value) clearInterval(int);
-  },20);
+/* ================= RECALCULATE STOCK ================= */
+function recalculateInventoryStock() {
+  inventory.forEach(product => {
+    let stock = product.baseQty;
+
+    history.forEach(h => {
+      if (h.productId === product.id) {
+        stock += h.type === "IN" ? h.qty : -h.qty;
+      }
+    });
+
+    product.qty = Math.max(stock, 0);
+  });
 }
+
+/* ================= RENDER INVENTORY ================= */
+function renderInventory(data = inventory) {
+  tableBody.innerHTML = "";
+  data.forEach(p => {
+    tableBody.innerHTML += `
+      <tr>
+        <td>${p.id}</td>
+        <td>${p.name}</td>
+        <td>${p.category}</td>
+        <td class="${p.qty <= 5 ? "lowQty" : ""}">${p.qty}</td>
+        <td>${p.qty <= 5 ? "Low" : "Good"}</td>
+        <td>${p.expiry || "-"}</td>
+        <td>
+          <button class="action-btn edit" onclick="editProduct('${p.id}')">Edit</button>
+          <button class="action-btn delete" onclick="deleteProduct('${p.id}')">Delete</button>
+        </td>
+      </tr>`;
+  });
+}
+
+/* ================= HISTORY ================= */
+function renderHistory() {
+  historyBody.innerHTML = "";
+  history.forEach(h => {
+    historyBody.innerHTML += `
+      <tr>
+        <td>${h.name}</td>
+        <td>${h.type}</td>
+        <td>${h.qty}</td>
+        <td>${h.date}</td>
+      </tr>`;
+  });
+}
+
+/* ================= EDIT / DELETE ================= */
+window.editProduct = id => {
+  const p = inventory.find(x => x.id === id);
+  pid.value = p.id;
+  pname.value = p.name;
+  category.value = p.category;
+  qty.value = p.baseQty;
+  expiryDate.value = p.expiry;
+  qty.disabled = true;
+};
+
+window.deleteProduct = id => {
+  if (!confirm("Delete this product?")) return;
+  inventory = inventory.filter(p => p.id !== id);
+  history = history.filter(h => h.productId !== id);
+  saveAll();
+  renderAll();
+};
+
+/* ================= DASHBOARD ================= */
+function updateDashboard() {
+  totalProducts.textContent = inventory.length;
+  totalStock.textContent = inventory.reduce((a,b)=>a+b.qty,0);
+  lowStock.textContent = inventory.filter(p=>p.qty<=5).length;
+  expired.textContent = inventory.filter(p=>p.expiry && new Date(p.expiry)<new Date()).length;
+}
+
+/* ================= SEARCH ================= */
+searchInput.addEventListener("input", () => {
+  const v = searchInput.value.toLowerCase();
+  renderInventory(inventory.filter(p =>
+    p.id.toLowerCase().includes(v) || p.name.toLowerCase().includes(v)
+  ));
+});
+
+/* ================= THEME ================= */
+themeToggle.onclick = () => {
+  document.body.classList.toggle("dark");
+  themeToggle.textContent = document.body.classList.contains("dark") ? "☀️" : "🌙";
+};
+
+/* ================= CHARTS ================= */
+function renderCharts() {
+  const labels = inventory.map(p => p.name);
+  const qtys = inventory.map(p => p.qty);
+
+  if (barChart) barChart.destroy();
+  if (pieChart) pieChart.destroy();
+
+  barChart = new Chart(document.getElementById("barChart"), {
+    type: "bar",
+    data: { labels, datasets: [{ data: qtys, backgroundColor: "#4facfe" }] },
+    options: { responsive: true, maintainAspectRatio: false }
+  });
+
+  pieChart = new Chart(document.getElementById("pieChart"), {
+    type: "pie",
+    data: { labels, datasets: [{ data: qtys }] },
+    options: { maintainAspectRatio: false }
+  });
+}
+
+/* ================= UTIL ================= */
+function saveAll() {
+  localStorage.setItem("inventory", JSON.stringify(inventory));
+  localStorage.setItem("history", JSON.stringify(history));
+}
+
+function renderAll() {
+  recalculateInventoryStock();
+  renderInventory();
+  renderHistory();
+  updateDashboard();
+  renderCharts();
+}
+
+renderAll();
+
